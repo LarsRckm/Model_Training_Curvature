@@ -108,12 +108,6 @@ def train_model_TimeSeries_paper(config):
     model = get_model_timeSeries(config, seq_len, vocab_size).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"], eps=1e-9)
-    total_steps = (config["num_epochs"] - 2000) * (config["train_count"] // config["batch_size"])
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    optimizer,
-    T_max=total_steps,
-    eta_min=3e-7
-)
 
 
     initial_epoch = 0
@@ -129,6 +123,13 @@ def train_model_TimeSeries_paper(config):
         initial_epoch = state['epoch'] + 1
         optimizer.load_state_dict(state['optimizer_state_dict'])
         global_step = state['global_step']
+    
+    total_steps = (config["num_epochs"] - 2000) * (config["train_count"] // config["batch_size"])
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer,
+    T_max=total_steps,
+    eta_min=3e-7
+    )
 
     #recalculating original numbers
     i2v_dict = index_to_value_dict(config["vocab_size"], config["extra_tokens"])
