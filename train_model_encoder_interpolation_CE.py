@@ -1,6 +1,7 @@
 import torch 
 import torch.nn as nn
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 import pandas as pd
 import numpy as np
 
@@ -107,6 +108,13 @@ def train_model_TimeSeries_paper(config):
     model = get_model_timeSeries(config, seq_len, vocab_size).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"], eps=1e-9)
+    total_steps = (config["num_epochs"] - 2000) * (config["train_count"] // config["batch_size"])
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer,
+    T_max=total_steps,
+    eta_min=3e-7
+)
+
 
     initial_epoch = 0
     global_step = 0
@@ -181,6 +189,11 @@ def train_model_TimeSeries_paper(config):
             logits = proj_output.clone()
             logits[:,:,-1] = -1e10
             probs = torch.softmax(proj_output, dim=-1)     # (B,S,V)
+
+
+            loss_kl = F.kl_div(probs[:,:-1,:].log(), probs[:,1:,:], reduction='batchmean')
+
+
             #das ist nur für die alten Modelle, bei denen im output auch noch der ukn vorhergesagt werden kann
 
             # i2v_values: (V,) oder (V,1) als float tensor auf device
@@ -208,14 +221,17 @@ def train_model_TimeSeries_paper(config):
 
             # alpha = (g_ce / (g_grad + 1e-8)).detach()
 
-            loss = lossCE + config["Curvature_loss_weight"] * loss_curv
-            batch_iterator.set_postfix({f"loss": f"{loss.item():6.5f}; lossCE: {lossCE.item():6.3f}; lossCurvature: {loss_curv.item():6.3f}"})
+            loss = lossCE + config["loss_weight_c"] * loss_curv + config["loss_weight_kl"] * loss_kl
 
             #backpropagate the loss
             loss.backward()
 
             #update the weights
             optimizer.step()
+            scheduler.step()
+
+            batch_iterator.set_postfix({f"loss": f"{loss.item():6.5f}; lossCE: {lossCE.item():6.3f}; lossCurvature: {loss_curv.item():6.3f}; loss_KL: {loss_kl.item():6.3f}; LR: {scheduler.get_last_lr()[0]:.7f}"})
+
             optimizer.zero_grad()
 
             global_step += 1

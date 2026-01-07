@@ -19,14 +19,16 @@ def get_config():
         "width_array_encoder": [10,100,10],                  #[min_width, max_width, max_count_width]
         "batch_size": 20,                                    #train_count / batch_size = number_iteration_per_epoch
         "num_epochs": 4000,                                  #max number of training epochs
-        "lr": 10**-4,                                       #learning rate for Adam optimizer
+        "lr": 5e-5,                                       #learning rate for Adam optimizer
         "d_model": 512,
         "model_folder": "weights",                          #folder name to store models in
-        "model_basename": "Encoder_Interpolation_Discontinuous_",
+        "model_basename": "Encoder_Interpolation_CE_PeriodicSum_",
         "preload": "latest",                                #whether or not to start training with the latest trained version
         "experiment_name": "runs/tmodel",
         "label_smoothing": 0.0,
-        "Curvature_loss_weight": 1e-4
+        "loss_weight_c": 1e-5,
+        "loss_weight_kl": 1e-4,
+
     }
 
 def get_weights_file_path(config, epoch: str):
