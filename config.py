@@ -28,6 +28,7 @@ def get_config():
         "label_smoothing": 0.0,
         "loss_weight_c": 1e-5,
         "loss_weight_kl": 1e-4,
+        "loss_weight_area": 1,
 
     }
 

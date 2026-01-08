@@ -124,7 +124,7 @@ def train_model_TimeSeries_paper(config):
         optimizer.load_state_dict(state['optimizer_state_dict'])
         global_step = state['global_step']
     
-    total_steps = (config["num_epochs"] - 2000) * (config["train_count"] // config["batch_size"])
+    total_steps = (config["num_epochs"] - 3400) * (config["train_count"] // config["batch_size"])
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optimizer,
     T_max=total_steps,
@@ -183,7 +183,7 @@ def train_model_TimeSeries_paper(config):
 
 
             groundTruth = batch["groundTruth_indices"].to(device).view(-1)  #(batch,seq_len) --> (batch * seq_len)
-            prediction = proj_output.view(-1, vocab_size)                   #(batch,seq_len, 1) --> (batch * seq_len, tgt_vocab_size)
+            prediction = proj_output.view(-1, vocab_size)                   #(batch,seq_len, vocab size) --> (batch * seq_len, tgt_vocab_size)
             lossCE = loss_fn(prediction, groundTruth)                         #calculate cross-entropy-loss
             
 
@@ -192,7 +192,7 @@ def train_model_TimeSeries_paper(config):
             probs = torch.softmax(proj_output, dim=-1)     # (B,S,V)
 
 
-            loss_kl = F.kl_div(probs[:,:-1,:].log(), probs[:,1:,:], reduction='batchmean')
+            # loss_kl = F.kl_div(probs[:,:-1,:].log(), probs[:,1:,:], reduction='batchmean')
 
 
             #das ist nur für die alten Modelle, bei denen im output auch noch der ukn vorhergesagt werden kann
@@ -203,15 +203,15 @@ def train_model_TimeSeries_paper(config):
 
             pred_norm = (probs * i2v.view(1,1,-1)).sum(dim=-1)   # (B,S)
 
-            d2 = pred_norm[:,2:] - 2*pred_norm[:,1:-1] + pred_norm[:,:-2]
+            # d2 = pred_norm[:,2:] - 2*pred_norm[:,1:-1] + pred_norm[:,:-2]
 
             # scale = d2.abs().mean(dim=1, keepdim=True) + 1e-6
-            loss_curv = torch.sqrt((d2**2 + (1e-3)**2)).mean()
+            # loss_curv = torch.sqrt((d2**2 + (1e-3)**2)).mean()
 
             # pred_value = pred_value * div_term.unsqueeze(-1) + min_value.unsqueeze(-1)
             # prediction_grad = pred_value[:, 1:] - pred_value[:, :-1]
 
-            # groundTruth = batch["groundTruth"].to(device)
+            groundTruth = batch["groundTruth"].to(device)
             # groundTruth = groundTruth * div_term.unsqueeze(-1) + min_value.unsqueeze(-1)
             # groundTruth_grad = groundTruth[:,1:] - groundTruth[:,:-1]
 
@@ -221,8 +221,14 @@ def train_model_TimeSeries_paper(config):
             # g_grad = grad_norm(lossGradient, model)
 
             # alpha = (g_ce / (g_grad + 1e-8)).detach()
+            loss_norm = torch.abs(pred_norm[:,:] - groundTruth[:,:])
+            dt = torch.ones_like(loss_norm).to(device)
+            integrationstep = 0.5 * (loss_norm[:,1:] + loss_norm[:,:-1]) * dt[:,:-1]
+            integral_val = integrationstep.sum(dim=1)
+            area_loss = integral_val.mean()
 
-            loss = lossCE + config["loss_weight_c"] * loss_curv + config["loss_weight_kl"] * loss_kl
+            # loss = lossCE + config["loss_weight_c"] * loss_curv + config["loss_weight_kl"] * loss_kl
+            loss = lossCE + config["loss_weight_area"] * area_loss
 
             #backpropagate the loss
             loss.backward()
@@ -231,7 +237,8 @@ def train_model_TimeSeries_paper(config):
             optimizer.step()
             scheduler.step()
 
-            batch_iterator.set_postfix({f"loss": f"{loss.item():6.5f}; lossCE: {lossCE.item():6.3f}; lossCurvature: {loss_curv.item():6.3f}; loss_KL: {loss_kl.item():6.3f}; LR: {scheduler.get_last_lr()[0]:.7f}"})
+            # batch_iterator.set_postfix({f"loss": f"{loss.item():6.5f}; lossCE: {lossCE.item():6.3f}; lossCurvature: {loss_curv.item():6.3f}; loss_KL: {loss_kl.item():6.3f}; LR: {scheduler.get_last_lr()[0]:.7f}"})
+            batch_iterator.set_postfix({f"loss": f"{loss.item():6.5f}; lossCE: {lossCE.item():6.3f}; lossArea: {area_loss.item():6.3f}; LR: {scheduler.get_last_lr()[0]:.7f}"})
 
             optimizer.zero_grad()
 
@@ -240,6 +247,10 @@ def train_model_TimeSeries_paper(config):
 
 
         if epoch % 20 == 0:
+            #store last traingin result (matrix with probability distribution and )
+            prob_distribution = np.memmap(f"results_train/prob_distribution_epoch_{epoch}.npy", dtype='float32', mode='w+', shape=proj_output[0,:,:].shape)
+            prob_distribution[:] = proj_output[0,:,:].detach().cpu().numpy()    #(seq_len, vocab_size)
+            prob_distribution.flush()
             #store training results
             df = pd.DataFrame()
             df.loc[:,f"noise"] = (noise_copy).detach().cpu().numpy()                                                #index form

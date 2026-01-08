@@ -841,6 +841,8 @@ def plot_val_encoder_roundedInput(file_number: int, column: int):
     noise_removed = torch.tensor(df[f"noise_removed_{column}"].to_numpy())
     prediction = torch.tensor(df[f"prediction_{column}"].to_numpy())
 
+    prediction_token = prediction
+
     noise = noise.type(torch.float32).apply_(lambda x: 0 if int(x) > config["vocab_size"] else i2v[f"{int(x)}"])
     noise_removed = noise_removed.type(torch.float32).apply_(lambda x: 0 if int(x) > config["vocab_size"] else i2v[f"{int(x)}"])
     
@@ -851,16 +853,27 @@ def plot_val_encoder_roundedInput(file_number: int, column: int):
     noise = (noise*div_term)+min_value
     noise_removed = (noise_removed*div_term)+min_value
     prediction = (prediction*div_term)+min_value
+
+    difference = prediction - groundTruth
     
     
     result = []
     result.append([[noise_removed, "Noise removed"], [groundTruth,"GroundTruth"], [prediction, "Prediction"]])
 
     length = len(result)
-    _, axis = plt.subplots(length,1, sharex=True)
-    axis.plot(x_values, noise, label=f"Noise", linewidth=4)
+    _, (axis, axis2, axis3) = plt.subplots(length,3, sharex=True)
+    # axis.plot(x_values, noise, label=f"Noise", linewidth=4)
     axis.plot(x_values, noise_removed, label=f"Noise Interpolation", linewidth=4)
+    axis.plot(x_values, groundTruth, label=f"Groundtruth", linewidth=4)
     axis.plot(x_values, prediction, label=f"Prediction", linewidth=4)
+
+    axis2.plot(x_values, difference, label=f"Difference Prediction - Groundtruth", linewidth=4)
+
+    axis3.plot(x_values, prediction_token, label=f"Prediction Tokens", linewidth=4)     
+
+    axis.legend(loc='best')
+    axis2.legend(loc='best')
+    axis3.legend(loc='best')
 
     plt.show()
 
@@ -1074,10 +1087,10 @@ def plot_multiple_pred_with_names_error_bar_area(x_values, y_values_prediction_t
 
 
 if __name__ == "__main__":
-    plot_val_encoder_roundedInput(2240, 0)
-    plot_val_encoder_roundedInput(2240, 1)
-    plot_val_encoder_roundedInput(2240, 2)
-    plot_val_encoder_roundedInput(2240, 3)
+    plot_val_encoder_roundedInput(2320, 0)
+    plot_val_encoder_roundedInput(2320, 1)
+    plot_val_encoder_roundedInput(2320, 2)
+    plot_val_encoder_roundedInput(2320, 3)
 
     # plot_multiple_pred_with_names_error_bar_area(1430)
 
